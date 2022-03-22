@@ -18,6 +18,7 @@ jobs:
     # ステップ
     # ※ステップは記述された順に実行される
     steps:
+      - run: exit 1
       # リポジトリのコードをチェックアウト（git clone）する
       - uses: actions/checkout@v2
 
