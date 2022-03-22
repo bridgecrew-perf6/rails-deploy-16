@@ -1,0 +1,67 @@
+# ワークフローの名前
+# 今回は「テストとデプロイ」という名前にしておく
+name: Test and Deploy
+
+# このワークフローを起動させるトリガー
+# ※今回はGitHub上での「pull request」をトリガーとする
+on:
+  pull_request:
+
+# ジョブ
+jobs:
+  # ジョブID
+  test:
+    # ジョブの名前
+    name: Test
+    runs-on: ubuntu-latest
+
+    # ステップ
+    # ※ステップは記述された順に実行される
+    steps:
+      # リポジトリのコードをチェックアウト（git clone）する
+      - uses: actions/checkout@v2
+
+      # Rubyのバージョンを指定
+      - uses: ruby/setup-ruby@v1
+        # withはアクション（uses）の引数
+        with:
+          ruby-version: 2.6.8
+
+      # Node.jsのバージョンを指定
+      - uses: actions/setup-node@v2
+        with:
+          node-version: 16
+
+      # キャッシュの設定（Gemのキャッシュ）
+      # ※Gemやnode_modulesをキャッシュし、GitHub Actionsの処理を高速化する
+      - name: Cache bundle
+        uses: actions/cache@v2
+        with:
+          path: vendor/bundle
+          key: bundle-v1-${{ hashFiles('Gemfile.lock') }}
+
+      # Gemのインストールを実行する
+      # ステップの名前
+      - name: Run bundle install
+        # runはステップで実行するコマンドのこと
+        # 「|」と記述すると、複数行にわたるコマンドを実行できる
+        run: |
+          bundle config --local path vendor/bundle
+          bundle config --local without production
+          bundle install
+
+      # キャッシュの設定（node_modulesのキャッシュ）
+      # ※Gemやnode_modulesをキャッシュし、GitHub Actionsの処理を高速化する
+      - name: Cache yarn
+        uses: actions/cache@v2
+        with:
+          path: node_modules
+          key: yarn-v1-${{ hashFiles('yarn.lock') }}
+
+      # アセットのコンパイルを実行する
+      # アセットとは、「rails-deploy/app/assets/」ディレクトリの中身のこと
+      - run: RAILS_ENV=test bundle exec rails assets:precompile
+
+      # テストを実行する
+      # Gemのインストール、アセットのコンパイル後の処理
+      - run: bundle exec rails test
