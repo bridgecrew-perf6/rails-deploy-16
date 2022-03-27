@@ -6,10 +6,13 @@ name: Test and Deploy
 # ※今回はGitHub上での「pull request」をトリガーとする
 on:
   pull_request:
+  push:
+    branches:
+      - main
 
 # ジョブ
 jobs:
-  # ジョブID
+  # ジョブID（1つ目のジョブ・自動テスト）
   test:
     # ジョブの名前
     name: Test
@@ -65,3 +68,41 @@ jobs:
       # テストを実行する
       # Gemのインストール、アセットのコンパイル後の処理
       - run: bundle exec rails test
+
+  # ジョブID（1つ目のジョブ・自動デプロイ）
+  deploy:
+  # ジョブの名前
+    name: Deploy app to AWS
+
+    # ジョブ「Test」が正常に完了した後に、このジョブ「Deploy app to AWS」を実行する
+    needs: test
+
+    # ジョブの条件式
+    # ジョブ「Test」が正常に完了した後で、かつ、「main」ブランチにプルリクエストがマージされた時にこのジョブを実行
+    if: github.ref == 'refs/heads/main'
+
+    runs-on: ubuntu-latest
+
+    # ステップ
+    # ※ステップは記述された順に実行される
+    steps:
+      # 秘密鍵の設定
+      - name: Install SSH key
+        run: |
+          mkdir -p -m 700 ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/rails-deploy-webapp
+          chmod 600 ~/.ssh/rails-deploy-webapp
+
+      # デプロイ
+      - name: Deploy
+        run: |
+          eval $(ssh-agent)
+          ssh-add ~/.ssh/rails-deploy-webapp
+          ssh -o StrictHostKeyChecking=no -A webapp@${{ secrets.TARGET_HOSTNAME }} "cd rails-deploy &&
+          git pull origin main &&
+          ~/.rbenv/shims/bundle config --local deployment true &&
+          ~/.rbenv/shims/bundle config --local without development:test &&
+          ~/.rbenv/shims/bundle install &&
+          RAILS_ENV=production ~/.rbenv/shims/bundle exec rails assets:precompile &&
+          RAILS_ENV=production ~/.rbenv/shims/bundle exec rails db:migrate &&
+          ~/.rbenv/shims/bundle exec pumactl restart"
