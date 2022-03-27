@@ -86,6 +86,30 @@ jobs:
     # ステップ
     # ※ステップは記述された順に実行される
     steps:
+      # リポジトリのコードをチェックアウト（git clone）する
+      - uses: actions/checkout@v2
+
+      # Rubyのバージョンを指定
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 2.6.8
+
+      # キャッシュの設定（Gemのキャッシュ）
+      # ※Gemやnode_modulesをキャッシュし、GitHub Actionsの処理を高速化する
+      - name: Cache bundle
+        uses: actions/cache@v2
+        with:
+          path: vendor/bundle
+          key: bundle-v1-${{ hashFiles('Gemfile.lock') }}
+
+      # Gemのインストールを実行する
+      # ステップの名前
+      - name: Run bundle install
+        run: |
+          bundle config --local path vendor/bundle
+          bundle config --local without production
+          bundle install
+
       # 秘密鍵の設定
       - name: Install SSH key
         run: |
@@ -94,15 +118,10 @@ jobs:
           chmod 600 ~/.ssh/rails-deploy-webapp
 
       # デプロイ
-      - name: Deploy
+      - name: Capistrano deploy
         run: |
           eval $(ssh-agent)
           ssh-add ~/.ssh/rails-deploy-webapp
-          ssh -o StrictHostKeyChecking=no -A webapp@${{ secrets.TARGET_HOSTNAME }} "cd rails-deploy &&
-          git pull origin main &&
-          ~/.rbenv/shims/bundle config --local deployment true &&
-          ~/.rbenv/shims/bundle config --local without development:test &&
-          ~/.rbenv/shims/bundle install &&
-          RAILS_ENV=production ~/.rbenv/shims/bundle exec rails assets:precompile &&
-          RAILS_ENV=production ~/.rbenv/shims/bundle exec rails db:migrate &&
-          ~/.rbenv/shims/bundle exec pumactl restart"
+          bundle exec cap production deploy
+        env:
+          CAP_SERVER: ${{ secrets.TARGET_HOSTNAME }}
