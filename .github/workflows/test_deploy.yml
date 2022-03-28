@@ -117,6 +117,17 @@ jobs:
           echo "${{ secrets.SSH_KEY }}" > ~/.ssh/rails-deploy-webapp
           chmod 600 ~/.ssh/rails-deploy-webapp
 
+      # SSH接続の設定
+      - name: Set SSH Config
+        run: |
+          cat << EOF > ~/.ssh/config
+          Host rails-deploy-bastion
+            StrictHostKeyChecking no
+            HostName ${{ secrets.BASTION_HOSTNAME }}
+          Host rails-deploy-webapp
+            ProxyJump webapp@rails-deploy-bastion
+          EOF
+
       # デプロイ
       - name: Capistrano deploy
         run: |
@@ -124,4 +135,4 @@ jobs:
           ssh-add ~/.ssh/rails-deploy-webapp
           bundle exec cap production deploy
         env:
-          CAP_SERVER: ${{ secrets.TARGET_HOSTNAME }}
+          CAP_SERVER: rails-deploy-webapp
